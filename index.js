@@ -1,68 +1,60 @@
-#! /usr/bin/env node 
+#!/usr/bin/env node
+const fs = require('fs')
 const program = require('commander')
+const download = require('download-git-repo')
+const handlebars = require('handlebars')
 const inquirer = require('inquirer')
-const _ = require('lodash')
+const ora = require('ora')
 const chalk = require('chalk')
+const symbols = require('log-symbols')
 program
-    .command('module')
-    .alias('m')
-    .description('创建新的模块')
-    .option('--name [moduleName]')
-    .option('--sass', '启用sass')
-    .option('--less', '启用less')
-    .action(option => {
-        var config = _.assign({
-            moduleName: null,
-            description: '',
-            sass: false,
-            less: false
-        }, option)
-        var promps = []
-        if(config.moduleName !== 'string') {
-              promps.push({
-                type: 'input',
-                name: 'moduleName',
-                message: '请输入模块名称',
-                validate: function (input){
-                    if(!input) {
-                        return '不能为空'
-                    }
-                    return true
+  .version('1.0.0', '-v, --version')
+  .command('init <name>')
+  .action(name => {
+    if (!fs.existsSync(name)) {
+      inquirer
+        .prompt([
+          {
+            name: 'description',
+            message: '请输入项目描述'
+          },
+          {
+            name: 'author',
+            message: '请输入作者名称'
+          }
+        ])
+        .then(answers => {
+          const spinner = ora('正在下载模板...')
+          spinner.start()
+          download(
+            'https://github.com:winterdogdog/vue-template#master',
+            name,
+            { clone: true },
+            err => {
+              if (err) {
+                spinner.fail()
+                console.log(symbols.error, chalk.red(err))
+              } else {
+                spinner.succeed()
+                const fileName = `${name}/package.json`
+                const meta = {
+                  name,
+                  description: answers.description,
+                  author: answers.author
                 }
-              })
-        } 
-        if(config.description !== 'string') {
-            promps.push({
-                type: 'input',
-                name: 'moduleDescription',
-                message: '请输入模块描述'
-            })
-        }
-        if(config.sass === false && config.less === false) {
-          promps.push({
-            type: 'list',
-            name: 'cssPretreatment',
-            message: '想用什么css预处理器呢',
-            choices: [
-              {
-                name: 'Sass/Compass',
-                value: 'sass'
-              },
-              {
-                name: 'Less',
-                value: 'less'
+                if (fs.existsSync(fileName)) {
+                  const content = fs.readFileSync(fileName).toString()
+                  const result = handlebars.compile(content)(meta)
+                  fs.writeFileSync(fileName, result)
+                }
+                console.log(symbols.success, chalk.green('项目初始化完成'))
               }
-            ]
-          })
-        }
-        inquirer.prompt(promps).then(function (answers) {
-            console.log(answers)
+            }
+          )
         })
-    })
-    .on('--help', function() {
-        console.log('  Examples:')
-        console.log('')
-        console.log('$ app module moduleName')
-        console.log('$ app m moduleName')
-    }) 
+    } else {
+      // 错误提示项目已存在，避免覆盖原有项目
+      console.log(symbols.error, chalk.red('项目已存在'))
+    }
+  })
 program.parse(process.argv)
